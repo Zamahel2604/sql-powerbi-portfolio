@@ -63,6 +63,49 @@ SELECT country,
 	   ranking
 FROM top_category_ecom_2025
 WHERE ranking= 1;
+
+-- =====================================================================
+-- Proyecto: Ecommerce 2025
+-- Vista:    vw_ecomm_category_ranking
+-- Fuente:   tabla ecommerce_2025 (dataset público de Kaggle, datos de 2025)
+-- Granularidad: una fila por país + categoría
+-- Uso:      rankings de ventas para identificar la categoría líder de cada
+--           país y el país líder de cada categoría.
+--
+-- Decisiones de diseño:
+--  * Se calculan dos rankings con DENSE_RANK (los empates comparten
+--    posición y no se saltan números).
+--  * La vista no filtra por ranking = 1: en Power BI se filtra según lo
+--    que se quiera mostrar (por ejemplo, category_rank_in_country = 1).
+--  * Las ventas totales coinciden con vw_ecomm_global_2025, lo que sirve
+--    como control de calidad.
+-- =====================================================================
+CREATE OR REPLACE VIEW vw_ecomm_category_ranking AS
+WITH sales_by_country_category AS (
+    SELECT
+        country,
+        category,
+        COUNT(order_id)   AS total_orders,
+        SUM(total_amount) AS total_sales_amount
+    FROM ecommerce_2025
+    GROUP BY country, category
+)
+SELECT
+    country,
+    category,
+    total_orders,
+    total_sales_amount,
+    DENSE_RANK() OVER (
+        PARTITION BY country
+        ORDER BY total_sales_amount DESC
+    ) AS category_rank_in_country,
+    DENSE_RANK() OVER (
+        PARTITION BY category
+        ORDER BY total_sales_amount DESC
+    ) AS country_rank_in_category,
+    ROUND(100.0 * total_sales_amount
+          / NULLIF(SUM(total_sales_amount) OVER (PARTITION BY country), 0), 2) AS pct_of_country_sales
+FROM sales_by_country_category;
 	 
 
 
